@@ -1,0 +1,19 @@
+# AWS SAM
+.aws-sam/
+samconfig.toml.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local environment files
+.env
+.env.local
+.env.*.local

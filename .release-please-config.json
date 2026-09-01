@@ -1,0 +1,9 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "functionless-url-shortener",
+      "include-component-in-tag": false
+    }
+  }
+}
