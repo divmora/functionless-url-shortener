@@ -90,4 +90,4 @@ This project uses [Release Please](https://github.com/googleapis/release-please)
 
 ## Licensing & Contributor Terms
 
-By submitting a pull request, you agree that your contributions will be licensed under the project's [Business Source License 1.1 (BSL 1.1)](LICENSE), with the understanding that they will convert to the Apache License 2.0 under the standard Change Date schedule.
+By submitting a pull request, you agree that your contributions will be licensed under the project's [Apache License, Version 2.0](LICENSE).

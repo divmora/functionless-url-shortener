@@ -1,8 +1,9 @@
 # Functionless URL Shortener
 
 [![Latest Release](https://img.shields.io/github/v/release/divmora/functionless-url-shortener?logo=github)](https://github.com/divmora/functionless-url-shortener/releases)
-[![Documentation: DeepWiki](https://img.shields.io/badge/docs-DeepWiki-blue.svg)](https://deepwiki.com/divmora/functionless-url-shortener)
-[![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1-blue.svg)](https://github.com/divmora/.github/blob/main/LICENSING.md)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![CI/CD](https://github.com/divmora/functionless-url-shortener/actions/workflows/ci.yml/badge.svg)](https://github.com/divmora/functionless-url-shortener/actions)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/divmora/functionless-url-shortener)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-green.svg)](SECURITY.md)
 
 A high-performance, cost-effective URL shortener built completely without compute (no AWS Lambda functions). All routing and business logic are handled directly at the **Amazon API Gateway** layer via Velocity Template Language (VTL) mapping templates that communicate natively with **Amazon DynamoDB**.
@@ -254,17 +255,12 @@ To remove all deployed resources:
 ## Community & Contributing
 
 - **[Contributing Guide](CONTRIBUTING.md)**: Review contribution guidelines, development workflows, and Conventional Commit requirements.
+- **[Product Roadmap](ROADMAP.md)**: View planned architectural vision, edge optimizations, and upcoming capabilities.
 - **[Code of Conduct](https://github.com/divmora/.github/blob/main/CODE_OF_CONDUCT.md)**: Contributor Covenant Code of Conduct.
 - **[Security Policy](SECURITY.md)**: Guidelines for reporting security vulnerabilities responsibly.
 
 ---
 
-## License & Commercial Use
+## License
 
-This project is licensed under the **Business Source License 1.1 (BSL 1.1)**.
-
-- **Non-Production & Evaluation:** Free to use, modify, and test in non-production environments (local development, staging, QA, CI/CD pipelines, and proof-of-concept evaluation).
-- **Production & Commercial Use:** Deploying or executing in production environments, embedding into commercial products, or offering as a managed service requires a commercial license (EULA) from **DIVMORA Technologies**.
-- **Open Source Transition:** Each release automatically converts to the **Apache License, Version 2.0** three (3) years after its release date.
-
-For commercial licensing inquiries, enterprise support, or questions, please contact **licensing@divmora.com** or visit [divmora.com](https://divmora.com).
+This project is licensed under the **Apache License, Version 2.0**. See the [LICENSE](LICENSE) file for details.
