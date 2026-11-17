@@ -34,6 +34,11 @@ Parameters:
     Default: ''
     AllowedPattern: '^$|^arn:aws[a-z-]*:acm:us-east-1:\d{12}:certificate/[0-9a-f-]+$'
     ConstraintDescription: Must be an ACM certificate ARN in us-east-1 (CloudFront only accepts certificates from us-east-1).
+  EnableDashboard:
+    Type: String
+    Description: Create a CloudWatch dashboard for link traffic and service health (first 3 dashboards per account are free)
+    Default: 'true'
+    AllowedValues: ['true', 'false']
   HostedZoneId:
     Type: String
     Description: >-
@@ -61,6 +66,7 @@ Rules:
 
 Conditions:
   HasDomainAlias: !Not [!Equals [!Ref DomainAlias, '']]
+  CreateDashboard: !Equals [!Ref EnableDashboard, 'true']
   HasUrlPrefix: !Not [!Equals [!Ref CustomDomainName, '']]
   CreateDnsRecords: !And
     - !Condition HasDomainAlias
@@ -415,6 +421,316 @@ Resources:
         - !Ref NotifyTopic
 
 
+  ##   CloudWatch dashboard (optional)
+  TrafficDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Condition: CreateDashboard
+    Properties:
+      DashboardName: !Sub ${AWS::StackName}-traffic
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 2,
+              "properties": {
+                "markdown": "# ${AWS::StackName} — URL Shortener\nCloudFront metrics are global and shown from **us-east-1**; API Gateway and DynamoDB metrics are from **${AWS::Region}**."
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 2,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "CloudFront requests",
+                "view": "timeSeries",
+                "region": "us-east-1",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/CloudFront",
+                    "Requests",
+                    "DistributionId",
+                    "${CloudFrontDistro}",
+                    "Region",
+                    "Global"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 2,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "CloudFront error rate (%)",
+                "view": "timeSeries",
+                "region": "us-east-1",
+                "stat": "Average",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/CloudFront",
+                    "4xxErrorRate",
+                    "DistributionId",
+                    "${CloudFrontDistro}",
+                    "Region",
+                    "Global"
+                  ],
+                  [
+                    "AWS/CloudFront",
+                    "5xxErrorRate",
+                    "DistributionId",
+                    "${CloudFrontDistro}",
+                    "Region",
+                    "Global"
+                  ],
+                  [
+                    "AWS/CloudFront",
+                    "TotalErrorRate",
+                    "DistributionId",
+                    "${CloudFrontDistro}",
+                    "Region",
+                    "Global"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 2,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "CloudFront cache hit rate (%) — requires additional metrics",
+                "view": "timeSeries",
+                "region": "us-east-1",
+                "stat": "Average",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/CloudFront",
+                    "CacheHitRate",
+                    "DistributionId",
+                    "${CloudFrontDistro}",
+                    "Region",
+                    "Global"
+                  ]
+                ],
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 8,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway requests",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/ApiGateway",
+                    "Count",
+                    "ApiName",
+                    "URL Shortener API"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 8,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway latency (ms)",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "stat": "p99",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/ApiGateway",
+                    "Latency",
+                    "ApiName",
+                    "URL Shortener API",
+                    {
+                      "stat": "p50",
+                      "label": "Latency p50"
+                    }
+                  ],
+                  [
+                    "AWS/ApiGateway",
+                    "Latency",
+                    "ApiName",
+                    "URL Shortener API",
+                    {
+                      "stat": "p99",
+                      "label": "Latency p99"
+                    }
+                  ],
+                  [
+                    "AWS/ApiGateway",
+                    "IntegrationLatency",
+                    "ApiName",
+                    "URL Shortener API",
+                    {
+                      "stat": "p99",
+                      "label": "Integration p99"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 8,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway errors",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/ApiGateway",
+                    "4XXError",
+                    "ApiName",
+                    "URL Shortener API"
+                  ],
+                  [
+                    "AWS/ApiGateway",
+                    "5XXError",
+                    "ApiName",
+                    "URL Shortener API"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 14,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "DynamoDB consumed capacity",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/DynamoDB",
+                    "ConsumedReadCapacityUnits",
+                    "TableName",
+                    "${LinkTable}"
+                  ],
+                  [
+                    "AWS/DynamoDB",
+                    "ConsumedWriteCapacityUnits",
+                    "TableName",
+                    "${LinkTable}"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 14,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "DynamoDB throttles",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/DynamoDB",
+                    "ReadThrottleEvents",
+                    "TableName",
+                    "${LinkTable}"
+                  ],
+                  [
+                    "AWS/DynamoDB",
+                    "WriteThrottleEvents",
+                    "TableName",
+                    "${LinkTable}"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 14,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "DynamoDB system errors",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    {
+                      "expression": "SEARCH('{AWS/DynamoDB,Operation,TableName} MetricName=\"SystemErrors\" TableName=\"${LinkTable}\"', 'Sum', 300)",
+                      "id": "e1",
+                      "label": "SystemErrors"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "alarm",
+              "x": 0,
+              "y": 20,
+              "width": 24,
+              "height": 4,
+              "properties": {
+                "title": "Alarm status",
+                "alarms": [
+                  "${APIGateway4xxAlarm.Arn}",
+                  "${APIGateway5xxAlarm.Arn}",
+                  "${APIGatewayLatencyAlarm.Arn}",
+                  "${DDB5xxAlarm.Arn}",
+                  "${DDB4xxAlarm.Arn}",
+                  "${CloudFrontTotalErrorRateAlarm.Arn}",
+                  "${CloudFrontTotalCacheHitRateAlarm.Arn}"
+                ]
+              }
+            }
+          ]
+        }
+
 ###################################################################################################
 ##   Template outputs                                                                            ##
 ###################################################################################################
@@ -431,6 +747,11 @@ Outputs:
   ManagementApiEndpoint:
     Description: SigV4 management API endpoint (call this directly, not via CloudFront); used by the shorten CLI
     Value: !Sub https://${SiteAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod
+
+  DashboardUrl:
+    Condition: CreateDashboard
+    Description: CloudWatch dashboard for link traffic and service health
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/${TrafficDashboard}
 
   ShortUrlBase:
     Description: Base URL for short links (CustomDomainName, else https://DomainAlias, else the CloudFront domain)
