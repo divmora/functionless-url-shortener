@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Functionless URL Shortener - CloudFront alarms. CloudFront metrics are only available in
+  us-east-1, so deploy this template in us-east-1. It is nested automatically by template.yaml
+  when the main stack is itself in us-east-1.
+
+###################################################################################################
+##   Template Parameters                                                                         ##
+###################################################################################################
+Parameters:
+  DistributionId:
+    Type: String
+    Description: CloudFront distribution ID (CloudFrontDistributionId output of the main stack)
+    AllowedPattern: '^[A-Z0-9]+$'
+  AlarmNamePrefix:
+    Type: String
+    Description: Prefix for alarm names, usually the main stack name
+    Default: URLShortener
+  AlarmTopicArn:
+    Type: String
+    Description: >-
+      Optional existing SNS topic ARN in us-east-1 for notifications. Leave empty to create a topic here.
+    Default: ''
+  AlarmEmail:
+    Type: String
+    Description: Optional email subscribed to the topic created by this stack (ignored when AlarmTopicArn is set)
+    Default: ''
+  EnableCacheHitRateAlarm:
+    Type: String
+    Description: >-
+      Create the CacheHitRate alarm. Requires CloudFront additional metrics
+      (EnableCloudFrontAdditionalMetrics=true on the main stack), otherwise the metric has no data.
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+Conditions:
+  CreateTopic: !Equals [!Ref AlarmTopicArn, '']
+  CreateEmailSubscription: !And
+    - !Condition CreateTopic
+    - !Not [!Equals [!Ref AlarmEmail, '']]
+  CreateCacheHitRateAlarm: !Equals [!Ref EnableCacheHitRateAlarm, 'true']
+
+###################################################################################################
+##   Template Resources                                                                          ##
+###################################################################################################
+Resources:
+  NotifyTopic:
+    Type: AWS::SNS::Topic
+    Condition: CreateTopic
+
+  NotifyEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: CreateEmailSubscription
+    Properties:
+      TopicArn: !Ref NotifyTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  ##   TotalErrorRate is a default metric (Percent, Average). CloudFront metrics always carry
+  ##   the Region=Global dimension in addition to DistributionId.
+  CloudFrontTotalErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AlarmNamePrefix} CloudFront Error Rate"
+      AlarmDescription: Percentage of viewer requests returning 4xx/5xx above 5% for 5 minutes
+      Namespace: AWS/CloudFront
+      MetricName: TotalErrorRate
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref DistributionId
+        - Name: Region
+          Value: Global
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !If [CreateTopic, !Ref NotifyTopic, !Ref AlarmTopicArn]
+
+  ##   CacheHitRate is an additional metric (Percent, Average); it only has data when additional
+  ##   metrics are enabled on the distribution.
+  CloudFrontCacheHitRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateCacheHitRateAlarm
+    Properties:
+      AlarmName: !Sub "${AlarmNamePrefix} CloudFront Cache Hit Rate"
+      AlarmDescription: CloudFront cache hit rate at or below 80% for 15 minutes
+      Namespace: AWS/CloudFront
+      MetricName: CacheHitRate
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref DistributionId
+        - Name: Region
+          Value: Global
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 80
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !If [CreateTopic, !Ref NotifyTopic, !Ref AlarmTopicArn]
+
+Outputs:
+  AlarmTopicArn:
+    Description: SNS topic receiving CloudFront alarm notifications
+    Value: !If [CreateTopic, !Ref NotifyTopic, !Ref AlarmTopicArn]

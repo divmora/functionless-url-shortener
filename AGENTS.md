@@ -13,7 +13,8 @@ This project implements a **100% functionless architecture** on AWS:
   - `LinkTable`: Amazon DynamoDB table with PAY_PER_REQUEST billing, `id` (hash key), `owner` (GSI), and TTL (`ttl` attribute).
   - `CloudFrontDistro`: CloudFront CDN distribution caching public redirects (`/?go=...`) and accelerating global traffic.
   - `DDBReadRole` & `DDBCrudRole`: IAM execution roles assumed by `apigateway.amazonaws.com` for DynamoDB `GetItem` and `UpdateItem`.
-  - CloudWatch Alarms & SNS Topic: Operational monitors for API 4xx/5xx/Latency, DynamoDB 4xx/5xx, and CloudFront error/cache hit rates.
+  - CloudWatch Alarms & SNS Topic: API 4xx/5xx/Latency (filtered on `ApiName=<StackName>-api`, kept in sync with `info.title` in `api.yaml`) and DynamoDB `SystemErrors` (published only per `TableName`+`Operation`, so summed via metric math).
+- `cloudfront-alarms.yaml`: CloudFront alarms. CloudFront metrics exist only in us-east-1 with `Region=Global`; nested automatically when the main stack is in us-east-1, otherwise deployed separately there. Before adding or changing an alarm, verify the metric's dimensions in the AWS docs.
 - `api.yaml`: OpenAPI 3.0.1 specification detailing:
   - `/` & `/{linkId}`: Public HTTP 301 redirects using VTL mapping templates directly into DynamoDB `GetItem`.
   - `/api` (`POST`): Secured link creation using DynamoDB `UpdateItem` with conditional check `attribute_not_exists(id)` and SigV4 IAM auth.

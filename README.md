@@ -71,6 +71,8 @@ During the guided deployment, SAM CLI will prompt for the following parameters:
 | **DomainAlias** | No | `""` | Optional custom hostname served by CloudFront (e.g. `go.example.com`). Requires `AcmCertificateArn`. |
 | **AcmCertificateArn** | Conditional | `""` | ACM certificate ARN in **us-east-1** covering `DomainAlias`. Required when `DomainAlias` is set. |
 | **EnableDashboard** | No | `true` | Create a CloudWatch dashboard for link traffic and service health. |
+| **AlarmEmail** | No | `""` | Email address subscribed to alarm notifications (confirm the SNS email after deploy). |
+| **EnableCloudFrontAdditionalMetrics** | No | `false` | Enable CloudFront additional metrics (needed for `CacheHitRate` and its alarm); billed as CloudWatch custom metrics. |
 | **HostedZoneId** | No | `""` | Optional Route 53 hosted zone ID. When set, alias `A`/`AAAA` records for `DomainAlias` are created automatically. |
 | **TTL** | No | `31536000` | Default URL lifespan in seconds (default is 1 year). |
 
@@ -137,6 +139,38 @@ To serve short links from your own domain (e.g. `https://go.example.com/abc123`)
 3. **Point DNS at CloudFront.** If `HostedZoneId` was provided, Route 53 alias records are created for you. Otherwise, create a `CNAME` for `DomainAlias` pointing to the `DnsTarget` stack output.
 
 The `ShortUrlBase` stack output shows the base URL that short links are returned with.
+
+---
+
+## Monitoring & Alarms
+
+| Alarm | Metric | Fires when |
+| :--- | :--- | :--- |
+| `<Stack> API 4xx` / `API 5xx` | `AWS/ApiGateway` `4XXError` / `5XXError` (`ApiName=<Stack>-api`, `Stage=Prod`) | Error rate (Average) > 1% over 1 min |
+| `<Stack> API Latency` | `AWS/ApiGateway` `Latency` | p99 > 75 ms over 5 min |
+| `<Stack> DynamoDB SystemErrors` | `AWS/DynamoDB` `SystemErrors` summed over `GetItem`, `UpdateItem`, `DeleteItem` | ≥ 1 error/min in 2 of 5 minutes |
+| `<Stack> CloudFront Error Rate` | `AWS/CloudFront` `TotalErrorRate` (`Region=Global`) | Average > 5% over 5 min |
+| `<Stack> CloudFront Cache Hit Rate` *(opt-in)* | `AWS/CloudFront` `CacheHitRate` (additional metric) | Average ≤ 80% for 15 min |
+
+Regional alarms notify the `AlarmTopicArn` output topic; set `AlarmEmail` to subscribe an address. Missing data (no traffic) is treated as OK.
+
+### CloudFront alarms (us-east-1)
+
+CloudFront publishes metrics only in **us-east-1**, so its alarms live in [`cloudfront-alarms.yaml`](cloudfront-alarms.yaml), with their own SNS topic in that region.
+
+* **Main stack in `us-east-1`:** created automatically as a nested stack, notifying the main topic.
+* **Main stack in any other region:** deploy the alarms yourself in `us-east-1`:
+  ```bash
+  aws cloudformation deploy --region us-east-1 \
+    --stack-name URLShortener-cloudfront-alarms \
+    --template-file cloudfront-alarms.yaml \
+    --parameter-overrides \
+      DistributionId=<CloudFrontDistributionId output> \
+      AlarmNamePrefix=URLShortener \
+      AlarmEmail=ops@example.com \
+      EnableCacheHitRateAlarm=false
+  ```
+  Set `EnableCacheHitRateAlarm=true` only if the main stack has `EnableCloudFrontAdditionalMetrics=true`.
 
 ---
 

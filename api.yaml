@@ -1,6 +1,6 @@
 openapi: "3.0.1"
 info:
-  title: "URL Shortener API"
+  title: {"Fn::Sub": "${AWS::StackName}-api"} # keep in sync with SiteAPI Name in template.yaml
   version: "1.0.0"
 
 x-amazon-apigateway-request-validators:

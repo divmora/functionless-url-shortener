@@ -39,6 +39,16 @@ Parameters:
     Description: Create a CloudWatch dashboard for link traffic and service health (first 3 dashboards per account are free)
     Default: 'true'
     AllowedValues: ['true', 'false']
+  AlarmEmail:
+    Type: String
+    Description: Optional email address subscribed to alarm notifications (confirm the SNS subscription email after deploy)
+    Default: ''
+  EnableCloudFrontAdditionalMetrics:
+    Type: String
+    Description: >-
+      Enable CloudFront additional metrics (needed for CacheHitRate and its alarm). Billed as CloudWatch custom metrics.
+    Default: 'false'
+    AllowedValues: ['true', 'false']
   HostedZoneId:
     Type: String
     Description: >-
@@ -67,6 +77,9 @@ Rules:
 Conditions:
   HasDomainAlias: !Not [!Equals [!Ref DomainAlias, '']]
   CreateDashboard: !Equals [!Ref EnableDashboard, 'true']
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+  CloudFrontAdditionalMetrics: !Equals [!Ref EnableCloudFrontAdditionalMetrics, 'true']
+  IsUsEast1: !Equals [!Ref AWS::Region, 'us-east-1']
   HasUrlPrefix: !Not [!Equals [!Ref CustomDomainName, '']]
   CreateDnsRecords: !And
     - !Condition HasDomainAlias
@@ -80,6 +93,7 @@ Resources:
   SiteAPI:
     Type: AWS::Serverless::Api
     Properties:
+      Name: !Sub ${AWS::StackName}-api # keep in sync with info.title in api.yaml; alarms filter on ApiName
       StageName: Prod
       EndpointConfiguration:
         Type: REGIONAL
@@ -294,132 +308,159 @@ Resources:
   NotifyTopic:
     Type: AWS::SNS::Topic
 
+  NotifyEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref NotifyTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
   APIGateway4xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: "URL Shortener API 4xx Alarm"
-      AlarmDescription: "4xx monitor"
-      MetricName: "4XXError"
-      Namespace: "AWS/ApiGateway"
+      AlarmName: !Sub "${AWS::StackName} API 4xx"
+      AlarmDescription: API Gateway 4xx error rate above 1% (Average of 4XXError is the error rate)
+      Namespace: AWS/ApiGateway
+      MetricName: 4XXError
       Dimensions:
-          - Name: "ApiName"
-            Value: "URL Shortener API"
-      Statistic: "Average"
+        - Name: ApiName
+          Value: !Sub ${AWS::StackName}-api
+        - Name: Stage
+          Value: Prod
+      Statistic: Average
       Period: 60
       EvaluationPeriods: 1
-      Threshold: .01
-      ComparisonOperator: "GreaterThanThreshold"
+      Threshold: 0.01
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
       AlarmActions:
         - !Ref NotifyTopic
 
   APIGateway5xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: "URL Shortener API 5xx Alarm"
-      AlarmDescription: "5xx monitor"
-      MetricName: "5XXError"
-      Namespace: "AWS/ApiGateway"
+      AlarmName: !Sub "${AWS::StackName} API 5xx"
+      AlarmDescription: API Gateway 5xx error rate above 1% (Average of 5XXError is the error rate)
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
       Dimensions:
-          - Name: "ApiName"
-            Value: "URL Shortener API"
-      Statistic: "Average"
+        - Name: ApiName
+          Value: !Sub ${AWS::StackName}-api
+        - Name: Stage
+          Value: Prod
+      Statistic: Average
       Period: 60
       EvaluationPeriods: 1
-      Threshold: .01
-      ComparisonOperator: "GreaterThanThreshold"
+      Threshold: 0.01
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
       AlarmActions:
         - !Ref NotifyTopic
 
   APIGatewayLatencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: "URL Shortener API Latency Alarm"
-      AlarmDescription: "Latency monitor"
-      MetricName: "Latency"
-      Namespace: "AWS/ApiGateway"
+      AlarmName: !Sub "${AWS::StackName} API Latency"
+      AlarmDescription: API Gateway p99 latency above 75 ms
+      Namespace: AWS/ApiGateway
+      MetricName: Latency
       Dimensions:
-          - Name: "ApiName"
-            Value: "URL Shortener API"
-      ExtendedStatistic: "p99"
+        - Name: ApiName
+          Value: !Sub ${AWS::StackName}-api
+        - Name: Stage
+          Value: Prod
+      ExtendedStatistic: p99
       Period: 300
       EvaluationPeriods: 1
       Threshold: 75
-      ComparisonOperator: "GreaterThanThreshold"
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
       AlarmActions:
         - !Ref NotifyTopic
 
+  ##   DynamoDB publishes SystemErrors only on the TableName + Operation pair, so sum the
+  ##   operations the API uses (GetItem, UpdateItem, DeleteItem). Alarms cannot use SEARCH().
   DDB5xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: "URL Shortener DDB 5xx Alarm"
-      AlarmDescription: "System monitor"
-      MetricName: "SystemErrors"
-      Namespace: "AWS/DynamoDB"
-      Dimensions:
-          - Name: "TableName"
-            Value: !Ref LinkTable
-      Statistic: "Average"
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: .01
-      ComparisonOperator: "GreaterThanThreshold"
-      AlarmActions:
-        - !Ref NotifyTopic
-
-  DDB4xxAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: "URL Shortener DDB 4xx Alarm"
-      AlarmDescription: "User monitor"
-      MetricName: "UserErrors"
-      Namespace: "AWS/DynamoDB"
-      Dimensions:
-          - Name: "TableName"
-            Value: !Ref LinkTable
-      Statistic: "Average"
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: .10
-      ComparisonOperator: "GreaterThanThreshold"
-      AlarmActions:
-        - !Ref NotifyTopic
-
-  CloudFrontTotalErrorRateAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: "Url Shortener CloudFront Errors"
-      AlarmDescription: "CDN error monitor"
-      MetricName: TotalErrorRate
-      Namespace: AWS/CloudFront
-      Dimensions:
-        - Name: DistributionId
-          Value: !Ref CloudFrontDistro
-      Statistic: Sum
-      Period: 60
-      EvaluationPeriods: 1
+      AlarmName: !Sub "${AWS::StackName} DynamoDB SystemErrors"
+      AlarmDescription: DynamoDB system (5xx) errors on the link table
+      Metrics:
+        - Id: total
+          Label: SystemErrors
+          Expression: FILL(getitem, 0) + FILL(updateitem, 0) + FILL(deleteitem, 0)
+          ReturnData: true
+        - Id: getitem
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/DynamoDB
+              MetricName: SystemErrors
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref LinkTable
+                - Name: Operation
+                  Value: GetItem
+            Period: 60
+            Stat: Sum
+        - Id: updateitem
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/DynamoDB
+              MetricName: SystemErrors
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref LinkTable
+                - Name: Operation
+                  Value: UpdateItem
+            Period: 60
+            Stat: Sum
+        - Id: deleteitem
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/DynamoDB
+              MetricName: SystemErrors
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref LinkTable
+                - Name: Operation
+                  Value: DeleteItem
+            Period: 60
+            Stat: Sum
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 2
+      Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
-      Threshold: 5
+      TreatMissingData: notBreaching
       AlarmActions:
         - !Ref NotifyTopic
 
-  CloudFrontTotalCacheHitRateAlarm:
-    Type: AWS::CloudWatch::Alarm
+  ##   CloudFront additional metrics (required for CacheHitRate; billed as CloudWatch custom metrics)
+  CloudFrontMonitoringSubscription:
+    Type: AWS::CloudFront::MonitoringSubscription
+    Condition: CloudFrontAdditionalMetrics
     Properties:
-      AlarmName: "Url Shortener CloudFront Cache Hit Rate"
-      AlarmDescription: "CDN eache monitor"
-      MetricName: CacheHitRate
-      Namespace: AWS/CloudFront
-      Dimensions:
-        - Name: DistributionId
-          Value: !Ref CloudFrontDistro
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 1
-      ComparisonOperator: LessThanOrEqualToThreshold
-      Threshold: .80
-      AlarmActions:
-        - !Ref NotifyTopic
+      DistributionId: !Ref CloudFrontDistro
+      MonitoringSubscription:
+        RealtimeMetricsSubscriptionConfig:
+          RealtimeMetricsSubscriptionStatus: Enabled
 
+  ##   CloudFront metrics exist only in us-east-1, so CloudFront alarms (and their SNS topic)
+  ##   live in cloudfront-alarms.yaml. Nested automatically when this stack is in us-east-1;
+  ##   otherwise deploy cloudfront-alarms.yaml in us-east-1 yourself (see README).
+  CloudFrontAlarms:
+    Type: AWS::CloudFormation::Stack
+    Condition: IsUsEast1
+    Properties:
+      TemplateURL: cloudfront-alarms.yaml
+      Parameters:
+        DistributionId: !Ref CloudFrontDistro
+        AlarmNamePrefix: !Ref AWS::StackName
+        AlarmTopicArn: !Ref NotifyTopic
+        EnableCacheHitRateAlarm: !Ref EnableCloudFrontAdditionalMetrics
 
   ##   CloudWatch dashboard (optional)
   TrafficDashboard:
@@ -551,7 +592,7 @@ Resources:
                     "AWS/ApiGateway",
                     "Count",
                     "ApiName",
-                    "URL Shortener API"
+                    "${AWS::StackName}-api"
                   ]
                 ]
               }
@@ -573,7 +614,7 @@ Resources:
                     "AWS/ApiGateway",
                     "Latency",
                     "ApiName",
-                    "URL Shortener API",
+                    "${AWS::StackName}-api",
                     {
                       "stat": "p50",
                       "label": "Latency p50"
@@ -583,7 +624,7 @@ Resources:
                     "AWS/ApiGateway",
                     "Latency",
                     "ApiName",
-                    "URL Shortener API",
+                    "${AWS::StackName}-api",
                     {
                       "stat": "p99",
                       "label": "Latency p99"
@@ -593,7 +634,7 @@ Resources:
                     "AWS/ApiGateway",
                     "IntegrationLatency",
                     "ApiName",
-                    "URL Shortener API",
+                    "${AWS::StackName}-api",
                     {
                       "stat": "p99",
                       "label": "Integration p99"
@@ -619,13 +660,13 @@ Resources:
                     "AWS/ApiGateway",
                     "4XXError",
                     "ApiName",
-                    "URL Shortener API"
+                    "${AWS::StackName}-api"
                   ],
                   [
                     "AWS/ApiGateway",
                     "5XXError",
                     "ApiName",
-                    "URL Shortener API"
+                    "${AWS::StackName}-api"
                   ]
                 ]
               }
@@ -721,10 +762,7 @@ Resources:
                   "${APIGateway4xxAlarm.Arn}",
                   "${APIGateway5xxAlarm.Arn}",
                   "${APIGatewayLatencyAlarm.Arn}",
-                  "${DDB5xxAlarm.Arn}",
-                  "${DDB4xxAlarm.Arn}",
-                  "${CloudFrontTotalErrorRateAlarm.Arn}",
-                  "${CloudFrontTotalCacheHitRateAlarm.Arn}"
+                  "${DDB5xxAlarm.Arn}"
                 ]
               }
             }
@@ -752,6 +790,14 @@ Outputs:
     Condition: CreateDashboard
     Description: CloudWatch dashboard for link traffic and service health
     Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/${TrafficDashboard}
+
+  CloudFrontDistributionId:
+    Description: CloudFront distribution ID (pass to cloudfront-alarms.yaml when deploying it in us-east-1)
+    Value: !Ref CloudFrontDistro
+
+  AlarmTopicArn:
+    Description: SNS topic receiving regional alarm notifications
+    Value: !Ref NotifyTopic
 
   ShortUrlBase:
     Description: Base URL for short links (CustomDomainName, else https://DomainAlias, else the CloudFront domain)
