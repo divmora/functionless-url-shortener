@@ -138,6 +138,51 @@ The `ShortUrlBase` stack output shows the base URL that short links are returned
 
 ---
 
+## Admin CLI (`shorten`)
+
+`shorten` signs management API requests for you using the standard AWS credential chain (environment variables, shared profiles, IAM Identity Center / SSO, instance roles), so you never have to hand-craft SigV4 requests.
+
+### Install
+
+Requires Go 1.26+:
+
+```bash
+go install github.com/divmora/functionless-url-shortener/cmd/shorten@latest
+```
+
+### Usage
+
+```bash
+# Create a link (a random 7-character ID is generated if --id is omitted)
+shorten create https://example.com/very/long/path --id launch --ttl 604800
+
+# Look up a link
+shorten get launch
+
+# Delete a link
+shorten delete launch
+
+# JSON output for scripting
+shorten get launch --output json
+```
+
+The CLI reads the management endpoint from the `ManagementApiEndpoint` output of the CloudFormation stack (default stack name `URLShortener`). Override with:
+
+| Flag | Env var | Description |
+| :--- | :--- | :--- |
+| `--stack` | `SHORTEN_STACK` | Stack to read the endpoint from (default `URLShortener`). |
+| `--endpoint` | `SHORTEN_ENDPOINT` | Management API endpoint; skips the stack lookup. |
+| `--region` | `AWS_REGION` | AWS region (inferred from `--endpoint` when possible). |
+| `--profile` | `AWS_PROFILE` | AWS shared config profile, e.g. an IAM Identity Center profile. |
+| `--output` | | `text` (default) or `json`. |
+
+Exit codes: `0` success, `1` error, `2` usage error, `3` link not found, `4` link ID already exists.
+
+> [!NOTE]
+> The CLI calls the API Gateway endpoint directly rather than CloudFront: CloudFront rewrites the `Host` header, which invalidates SigV4 signatures. Looking up the endpoint from the stack additionally requires `cloudformation:DescribeStacks`; use `--endpoint` if the caller lacks it.
+
+---
+
 ## IAM Permissions
 
 Clients calling the secured management endpoints (`/api/*`) require an IAM principal belonging to the configured AWS Organization with the following least-privilege policy:
@@ -154,7 +199,8 @@ Clients calling the secured management endpoints (`/api/*`) require an IAM princ
             ],
             "Resource": [
                 "arn:aws:execute-api:*:*:*/*/POST/api",
-                "arn:aws:execute-api:*:*:*/*/GET/api/*"
+                "arn:aws:execute-api:*:*:*/*/GET/api/*",
+                "arn:aws:execute-api:*:*:*/*/DELETE/api/*"
             ]
         }
     ]
@@ -228,7 +274,31 @@ Fetches metadata for an existing short link.
 
 ---
 
-### 3. URL Redirection (Public)
+### 3. Delete a Short URL
+
+Deletes an existing short link and returns the deleted record.
+
+* **Endpoint:** `DELETE /api/{linkId}`
+* **Authentication:** AWS SigV4 (IAM) + AWS Organization check (`aws:PrincipalOrgID`)
+* **Response (`200 OK`):**
+```json
+{
+  "id": "my-custom-slug",
+  "url": "https://example.com/very/long/destination/url",
+  "owner": "AROAEXAMPLEUSER:session-name"
+}
+```
+* **Response (`404 Not Found`)** if the link does not exist:
+```json
+{ "error": true, "message": "URL link not found" }
+```
+
+> [!NOTE]
+> CloudFront caches redirects for up to 5 minutes (`Cache-Control: max-age=300`), so a deleted link may keep redirecting briefly unless you create a CloudFront invalidation.
+
+---
+
+### 4. URL Redirection (Public)
 
 Performs an HTTP 301 redirect to the destination URL. No authentication required.
 
@@ -257,6 +327,12 @@ make deploy-guided
 
 # Deploy with existing samconfig.toml
 make deploy
+
+# Run Go unit tests for the shorten CLI
+make test
+
+# Build the shorten CLI into ./bin/shorten
+make cli
 
 # Clean temporary build artifacts
 make clean
