@@ -19,7 +19,7 @@ This project implements a **100% functionless architecture** on AWS:
   - `/api` (`POST`): Secured link creation using DynamoDB `UpdateItem` with conditional check `attribute_not_exists(id)` and SigV4 IAM auth.
   - `/api/{linkId}` (`GET`): Secured link metadata retrieval using DynamoDB `GetItem` and SigV4 IAM auth.
   - `/api/{linkId}` (`DELETE`): Secured link deletion using DynamoDB `DeleteItem` with conditional check `attribute_exists(id)`.
-- `cmd/shorten` + `internal/`: Go admin CLI that SigV4-signs management API calls. It calls the `ManagementApiEndpoint` (execute-api) output directly, never CloudFront, because CloudFront rewrites `Host` and breaks signatures. Verify with `make test`.
+- Admin CLI: lives in [divmora/functionless-url-shortener-cli](https://github.com/divmora/functionless-url-shortener-cli). It depends on the `ManagementApiEndpoint` output and the `/api` response shapes in `api.yaml`; keep them backward compatible.
 
 ---
 
