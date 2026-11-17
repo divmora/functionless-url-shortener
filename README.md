@@ -66,7 +66,10 @@ During the guided deployment, SAM CLI will prompt for the following parameters:
 | **AWS Region** | Yes | `ap-south-1` | The AWS region to deploy into. |
 | **AppName** | No | `shortener` | Application name prefix (must be globally unique, no spaces). |
 | **OrgId** | **Yes** | *(None)* | Your AWS Organization ID (e.g. `o-xxxxxxxxxx`) used to restrict IAM access on `/api/*`. |
-| **CustomDomainName** | No | `""` | Optional domain name prefix to format short URLs returned by the API (e.g. `https://sho.rt`). |
+| **CustomDomainName** | No | `""` | Optional URL prefix used to format short URLs returned by the API (e.g. `https://sho.rt`). Defaults to `https://<DomainAlias>` when `DomainAlias` is set. |
+| **DomainAlias** | No | `""` | Optional custom hostname served by CloudFront (e.g. `go.example.com`). Requires `AcmCertificateArn`. |
+| **AcmCertificateArn** | Conditional | `""` | ACM certificate ARN in **us-east-1** covering `DomainAlias`. Required when `DomainAlias` is set. |
+| **HostedZoneId** | No | `""` | Optional Route 53 hosted zone ID. When set, alias `A`/`AAAA` records for `DomainAlias` are created automatically. |
 | **TTL** | No | `31536000` | Default URL lifespan in seconds (default is 1 year). |
 
 #### Example Interactive Prompt
@@ -108,6 +111,30 @@ After the initial setup, you can re-deploy anytime using:
 ```bash
 make deploy
 ```
+
+---
+
+## Custom Domain
+
+To serve short links from your own domain (e.g. `https://go.example.com/abc123`):
+
+1. **Request a certificate in `us-east-1`.** CloudFront only accepts ACM certificates from `us-east-1`, regardless of the stack's region:
+   ```bash
+   aws acm request-certificate --region us-east-1 \
+     --domain-name go.example.com --validation-method DNS
+   ```
+   Complete DNS validation and wait until the certificate status is `ISSUED`.
+2. **Deploy with the custom domain parameters:**
+   ```bash
+   sam deploy --parameter-overrides \
+     OrgId=o-xxxxxxxxxx \
+     DomainAlias=go.example.com \
+     AcmCertificateArn=arn:aws:acm:us-east-1:111122223333:certificate/xxxx \
+     HostedZoneId=Z0123456789ABCDEFGHIJ   # optional
+   ```
+3. **Point DNS at CloudFront.** If `HostedZoneId` was provided, Route 53 alias records are created for you. Otherwise, create a `CNAME` for `DomainAlias` pointing to the `DnsTarget` stack output.
+
+The `ShortUrlBase` stack output shows the base URL that short links are returned with.
 
 ---
 

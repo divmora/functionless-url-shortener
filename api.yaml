@@ -148,7 +148,7 @@ paths:
                 \"url\":\"$inputRoot.Attributes.url.S\",
                 \"shortUrl\":\"${shortUrlPrefix}/?go=$inputRoot.Attributes.id.S\",
                 \"timestamp\":\"$inputRoot.Attributes.timestamp.S\", \
-                \"owner\":\"$inputRoot.Attributes.owner.S\"}", {"shortUrlPrefix": {"Ref": "CustomDomainName"}}] }
+                \"owner\":\"$inputRoot.Attributes.owner.S\"}", {"shortUrlPrefix": {"Fn::If": ["HasUrlPrefix", {"Ref": "CustomDomainName"}, {"Fn::If": ["HasDomainAlias", {"Fn::Sub": "https://${DomainAlias}"}, ""]}]}}] }
           "400":
             statusCode: "400"
             responseParameters:
@@ -200,7 +200,7 @@ paths:
                 \"url\":\"$inputRoot.url.S\",
                 \"shortUrl\":\"${shortUrlPrefix}/?go=$inputRoot.id.S\",
                 \"timestamp\":\"$inputRoot.timestamp.S\", \
-                \"owner\":\"$inputRoot.owner.S\"}", {"shortUrlPrefix": {"Ref": "CustomDomainName"}}] }
+                \"owner\":\"$inputRoot.owner.S\"}", {"shortUrlPrefix": {"Fn::If": ["HasUrlPrefix", {"Ref": "CustomDomainName"}, {"Fn::If": ["HasDomainAlias", {"Fn::Sub": "https://${DomainAlias}"}, ""]}]}}] }
         type: "aws"
 
 ## Validation models
