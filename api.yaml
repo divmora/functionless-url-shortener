@@ -203,6 +203,57 @@ paths:
                 \"owner\":\"$inputRoot.owner.S\"}", {"shortUrlPrefix": {"Fn::If": ["HasUrlPrefix", {"Ref": "CustomDomainName"}, {"Fn::If": ["HasDomainAlias", {"Fn::Sub": "https://${DomainAlias}"}, ""]}]}}] }
         type: "aws"
 
+    ## Delete a link
+    delete:
+      summary: Delete url
+      security:
+      - SigV4: []
+      x-amazon-apigateway-request-validator: params
+      parameters:
+        - $ref: '#/components/parameters/linkIdHeader'
+      responses:
+        "200":
+          description: "200 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        "400":
+          description: "400 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+
+      ## API Gateway integration
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::GetAtt: [ DDBCrudRole, Arn ]
+        uri: {"Fn::Sub":"arn:aws:apigateway:${AWS::Region}:dynamodb:action/DeleteItem"}
+        httpMethod: "POST"
+        requestTemplates:
+          application/json: {"Fn::Sub": "{\"Key\": {\"id\": {\"S\": \"$util.escapeJavaScript($input.params().path.linkId)\"}}, \"TableName\": \"${LinkTable}\", \"ConditionExpression\": \"attribute_exists(id)\", \"ReturnValues\": \"ALL_OLD\"}"}
+        passthroughBehavior: "when_no_templates"
+        responses:
+          "200":
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "#set($inputRoot = $input.path('$.Attributes')) \
+                {\"id\":\"$inputRoot.id.S\", \
+                \"url\":\"$inputRoot.url.S\", \
+                \"owner\":\"$inputRoot.owner.S\"}"
+          "400":
+            statusCode: "400"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "#set($inputRoot = $input.path('$')) \
+                #if($inputRoot.toString().contains(\"ConditionalCheckFailedException\")) \
+                #set($context.responseOverride.status = 404)
+                {\"error\": true,\"message\": \"URL link not found\"} \
+                #end"
+        type: "aws"
+
 ## Validation models
 components:
   schemas:

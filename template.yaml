@@ -428,6 +428,10 @@ Outputs:
     Description: API Gateway endpoint URL for linker
     Value: !GetAtt CloudFrontDistro.DomainName
 
+  ManagementApiEndpoint:
+    Description: SigV4 management API endpoint (call this directly, not via CloudFront); used by the shorten CLI
+    Value: !Sub https://${SiteAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod
+
   ShortUrlBase:
     Description: Base URL for short links (CustomDomainName, else https://DomainAlias, else the CloudFront domain)
     Value: !If

@@ -1,3 +1,6 @@
+# Go build output
+bin/
+
 # AWS SAM
 .aws-sam/
 samconfig.toml.local

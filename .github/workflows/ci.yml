@@ -9,3 +9,6 @@ on:
 jobs:
   ci:
     uses: divmora/.github/.github/workflows/cfn-ci.yml@main
+
+  go-ci:
+    uses: divmora/.github/.github/workflows/go-ci.yml@main

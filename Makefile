@@ -1,4 +1,4 @@
-.PHONY: all validate build deploy deploy-guided clean
+.PHONY: all validate build deploy deploy-guided test cli clean
 
 all: validate build
 
@@ -19,6 +19,14 @@ deploy-guided:
 	@echo "Starting guided deployment..."
 	sam deploy -g
 
+test:
+	@echo "Running Go tests..."
+	go test ./...
+
+cli:
+	@echo "Building shorten CLI..."
+	go build -o bin/shorten ./cmd/shorten
+
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -rf .aws-sam/
+	rm -rf .aws-sam/ bin/
