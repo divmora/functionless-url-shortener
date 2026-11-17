@@ -18,6 +18,7 @@ The administrative endpoints are secured using **AWS IAM Authentication (SigV4)*
 * **IAM & AWS Organizations Security:** Management endpoints (`/api/*`) require AWS SigV4 signed requests and are restricted to identities belonging to your specified AWS Organization ID (`aws:PrincipalOrgID`).
 * **Public High-Speed Redirects:** Public endpoints (`/{linkId}` and `/?go={linkId}`) perform fast HTTP 301 redirects directly from DynamoDB lookups, cached at the edge with CloudFront.
 * **Automatic Expiration (TTL):** Built-in DynamoDB Time-To-Live support automatically cleans up expired links.
+* **Traffic Dashboard:** An optional Amazon CloudWatch dashboard (`EnableDashboard`, on by default) showing CloudFront requests and error rates, API Gateway volume and latency, DynamoDB capacity and throttles, and alarm status. Its link is in the `DashboardUrl` stack output.
 * **Observability & Alerting:** Comprehensive Amazon CloudWatch alarms configured for API Gateway (4xx, 5xx, p99 Latency), DynamoDB (User/System Errors), and CloudFront (Error Rate, Cache Hit Rate), notifying an Amazon SNS topic.
 
 ---
@@ -69,6 +70,7 @@ During the guided deployment, SAM CLI will prompt for the following parameters:
 | **CustomDomainName** | No | `""` | Optional URL prefix used to format short URLs returned by the API (e.g. `https://sho.rt`). Defaults to `https://<DomainAlias>` when `DomainAlias` is set. |
 | **DomainAlias** | No | `""` | Optional custom hostname served by CloudFront (e.g. `go.example.com`). Requires `AcmCertificateArn`. |
 | **AcmCertificateArn** | Conditional | `""` | ACM certificate ARN in **us-east-1** covering `DomainAlias`. Required when `DomainAlias` is set. |
+| **EnableDashboard** | No | `true` | Create a CloudWatch dashboard for link traffic and service health. |
 | **HostedZoneId** | No | `""` | Optional Route 53 hosted zone ID. When set, alias `A`/`AAAA` records for `DomainAlias` are created automatically. |
 | **TTL** | No | `31536000` | Default URL lifespan in seconds (default is 1 year). |
 
