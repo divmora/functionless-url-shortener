@@ -20,10 +20,6 @@ This document serves as the **living product roadmap** for `functionless-url-sho
 
 ## 2. Security, Authorization & Abuse Prevention
 
-- [ ] **Destination URL Safelisting & Malicious Domain Filtering**
-  - Enforce destination domain allowlisting or integrate regex-based domain validation in the API Gateway VTL request template or JSON schema validation to prevent phishing or malicious redirects.
-- [ ] **AWS WAF Integration on CloudFront**
-  - Attach an AWS WAF WebACL to the CloudFront distribution with rate-limiting rules (`RateBasedRule`) and AWS Managed Rules (Common Rule Set) to mitigate brute-force URL enumeration.
 - [ ] **Scoped Principal IAM Authorization**
   - Support granular IAM policy conditions allowing teams to manage only their own prefixed link slugs (e.g. `execute-api:/*/*/api/teamA-*`).
 
@@ -33,8 +29,6 @@ This document serves as the **living product roadmap** for `functionless-url-sho
 
 - [ ] **Click Tracking & Telemetry Stream**
   - Enable DynamoDB Streams or CloudFront real-time log streaming to an Amazon Kinesis Firehose / S3 prefix to capture click counts, referrers, and geolocation telemetry without impacting redirect latency.
-- [ ] **Amazon CloudWatch Dashboard for Link Traffic**
-  - CloudFormation template definition for a CloudWatch Dashboard displaying request volume, CloudFront cache hit ratio, DynamoDB consumed read/write units, and 4xx/5xx error rates.
 - [ ] **Synthetic Canary Deployment**
   - Add an AWS CloudWatch Synthetics canary checking public redirect latency and API health periodically.
 
