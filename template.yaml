@@ -15,12 +15,56 @@ Parameters:
     Description: AWS Organization Id
   CustomDomainName:
     Type: String
-    Description: Name of the Domain which will used for short url
+    Description: >-
+      Optional URL prefix used when formatting short URLs returned by the API (e.g. https://sho.rt).
+      Defaults to https://<DomainAlias> when DomainAlias is set.
+    Default: ''
+  DomainAlias:
+    Type: String
+    Description: >-
+      Optional custom hostname served by CloudFront (e.g. sho.rt or go.example.com).
+      Requires AcmCertificateArn.
+    Default: ''
+    AllowedPattern: '^$|^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$'
+    ConstraintDescription: Must be a lowercase hostname without scheme or path (e.g. go.example.com).
+  AcmCertificateArn:
+    Type: String
+    Description: >-
+      ARN of an ACM certificate in us-east-1 that covers DomainAlias. Required when DomainAlias is set.
+    Default: ''
+    AllowedPattern: '^$|^arn:aws[a-z-]*:acm:us-east-1:\d{12}:certificate/[0-9a-f-]+$'
+    ConstraintDescription: Must be an ACM certificate ARN in us-east-1 (CloudFront only accepts certificates from us-east-1).
+  HostedZoneId:
+    Type: String
+    Description: >-
+      Optional Route 53 hosted zone ID for DomainAlias. When set, alias A/AAAA records pointing to CloudFront are created.
     Default: ''
   TTL:
     Type: Number
     Description: TTL time for url to be active
     Default: 31536000
+
+###################################################################################################
+##   Template Rules & Conditions                                                                 ##
+###################################################################################################
+Rules:
+  CustomDomainRequiresCertificate:
+    RuleCondition: !Not [!Equals [!Ref DomainAlias, '']]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AcmCertificateArn, '']]
+        AssertDescription: AcmCertificateArn is required when DomainAlias is set.
+  HostedZoneRequiresCustomDomain:
+    RuleCondition: !Not [!Equals [!Ref HostedZoneId, '']]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref DomainAlias, '']]
+        AssertDescription: DomainAlias is required when HostedZoneId is set.
+
+Conditions:
+  HasDomainAlias: !Not [!Equals [!Ref DomainAlias, '']]
+  HasUrlPrefix: !Not [!Equals [!Ref CustomDomainName, '']]
+  CreateDnsRecords: !And
+    - !Condition HasDomainAlias
+    - !Not [!Equals [!Ref HostedZoneId, '']]
 
 ###################################################################################################
 ##   Template Resources                                                                          ##
@@ -111,9 +155,21 @@ Resources:
   ##   CloudFront distribution
   CloudFrontDistro:
     Type: AWS::CloudFront::Distribution
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1030 # AcmCertificateArn defaults to '' but is only referenced when HasDomainAlias is true
     Properties:
       DistributionConfig:
         Comment: URL Shortener CDN
+        Aliases: !If [HasDomainAlias, [!Ref DomainAlias], !Ref AWS::NoValue]
+        ViewerCertificate: !If
+          - HasDomainAlias
+          - AcmCertificateArn: !Ref AcmCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref AWS::NoValue
         DefaultCacheBehavior:
           AllowedMethods: ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
           CachedMethods: ["GET", "HEAD", "OPTIONS"]
@@ -144,6 +200,29 @@ Resources:
             DomainName: !Sub ${SiteAPI}.execute-api.${AWS::Region}.amazonaws.com
             Id: "URLShortenerAPIGW"
             OriginPath: /Prod
+
+  ##   Route 53 alias records for the custom domain (optional)
+  DomainRecordA:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainAlias
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistro.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2 # CloudFront's fixed hosted zone ID
+
+  DomainRecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainAlias
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistro.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2 # CloudFront's fixed hosted zone ID
 
 ###################################################################################################
 ##   IAM Roles                                                                                   ##
@@ -347,4 +426,19 @@ Outputs:
 
   AppAPIRoot:
     Description: API Gateway endpoint URL for linker
+    Value: !GetAtt CloudFrontDistro.DomainName
+
+  ShortUrlBase:
+    Description: Base URL for short links (CustomDomainName, else https://DomainAlias, else the CloudFront domain)
+    Value: !If
+      - HasUrlPrefix
+      - !Ref CustomDomainName
+      - !If
+        - HasDomainAlias
+        - !Sub https://${DomainAlias}
+        - !Sub https://${CloudFrontDistro.DomainName}
+
+  DnsTarget:
+    Condition: HasDomainAlias
+    Description: Point a CNAME (or Route 53 alias) for DomainAlias at this CloudFront domain if HostedZoneId was not provided
     Value: !GetAtt CloudFrontDistro.DomainName
