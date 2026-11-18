@@ -273,6 +273,13 @@ components:
       required:
         - id
         - url
+  securitySchemes:
+    ## SigV4 (IAM) authorization for /api/* (OpenAPI 3: components.securitySchemes)
+    SigV4:
+      type: "apiKey"
+      name: "Authorization"
+      in: "header"
+      x-amazon-apigateway-authtype: "awsSigv4"
   parameters:
     linkIdHeaderQueryStr:
       in: query
@@ -289,10 +296,3 @@ components:
       schema:
         type: string
 
-## Authorizer definition
-securityDefinitions:
-  SigV4:
-    type: "apiKey"
-    name: "Authorization"
-    in: "header"
-    x-amazon-apigateway-authtype: "awsSigv4"
