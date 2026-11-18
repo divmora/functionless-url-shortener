@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/divmora/functionless-url-shortener/compare/v0.4.0...v0.5.0) (2026-11-18)
+
+
+### Features
+
+* add CloudWatch dashboard for link traffic ([#10](https://github.com/divmora/functionless-url-shortener/issues/10)) ([575a763](https://github.com/divmora/functionless-url-shortener/commit/575a76324ab7973e4ca0d54215e9abec2feaa57e)), closes [#6](https://github.com/divmora/functionless-url-shortener/issues/6)
+
+
+### Bug Fixes
+
+* declare SigV4 scheme under OpenAPI 3 components.securitySchemes ([#14](https://github.com/divmora/functionless-url-shortener/issues/14)) ([cd05484](https://github.com/divmora/functionless-url-shortener/commit/cd05484ebca557db2cbfd372ae5ebe2dba2dbc90))
+* make CloudWatch alarms watch metrics that actually exist ([#11](https://github.com/divmora/functionless-url-shortener/issues/11)) ([3e39521](https://github.com/divmora/functionless-url-shortener/commit/3e39521a262f9ddb61ef9cab655d634e9a7aa96b))
+
 ## [0.4.0](https://github.com/divmora/functionless-url-shortener/compare/v0.3.0...v0.4.0) (2026-11-17)
 
 
